@@ -24,10 +24,14 @@ class ScheduleGenerator:
 
         return holiday_dates.union(unit_tests_dates).union(exams_dates).union(set(self.vacation_dates))
     
-    def _get_valid_dates(self):
+    def _get_valid_dates(self, week_days=6):
         full_range = pd.date_range(start=start_date, end=end_date, freq='D')
-        return [date for date in full_range if date not in self.unavailable_dates]
-    
+        allowed_weekdays = set(range(0, week_days))  # 0=Monday, ..., 6=Sunday
+        return [
+            date for date in full_range
+            if date not in self.unavailable_dates and date.weekday() in allowed_weekdays
+        ]
+
     def _split_schedule_sections(self):
         return {
             'section_1': [d for d in self.valid_dates if d < unit_tests_1_start],
@@ -131,14 +135,19 @@ class ScheduleGenerator:
                 print ('Could not got available slot')
 
     def _get_available_slot(self, date, period):
-        avail_slot = (pd.isna(self.schedule_df.at[date, period]) or 
-                self.schedule_df.at[date, period] == '')
-        while not avail_slot:
-            period += 1
-            avail_slot = (pd.isna(self.schedule_df.at[date, period]) or 
-                self.schedule_df.at[date, period] == '')
-        
-        return (date, period)
+        dates = self.schedule_df.index[self.schedule_df.index.get_loc(date):]
+        date_idx = 0
+
+        while date_idx < len(dates):
+            while period <= 7:
+                if pd.isna(self.schedule_df.at[dates[date_idx], period]) or self.schedule_df.at[dates[date_idx], period] == '':
+                    return (dates[date_idx], period)
+                period += 1
+            date_idx += 1
+            period = 1  # Reset period for next date
+
+        print('No available slot found')
+        return (date, period)  # fallback, though it may be invalid
     
     def generate_schedule(self):
         return self.schedule_df
